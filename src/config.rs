@@ -116,9 +116,10 @@ const CHARS: &[char] = &[
     '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k',
     'm', 'n', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
 ];
+pub const RENDEZVOUS_SERVERS: &[&str] = &["falcon.my-vth.ch"];
 
-pub const RENDEZVOUS_SERVERS: &[&str] = &["rs-ny.rustdesk.com"];
-pub const RS_PUB_KEY: &str = "OeVuKk5nlHiXp+APNn0Y3pC1Iwpwn44JGqrQCsWqmBw=";
+/// FalconQS white-label : clé publique du serveur falcon (hbbs id_ed25519.pub).
+pub const RS_PUB_KEY: &str = "y7HFkRp6dnePO7+ehiUSpbhUIqAwnRYDdquULvqJQXg=";
 
 pub const RENDEZVOUS_PORT: i32 = 21116;
 pub const RELAY_PORT: i32 = 21117;
