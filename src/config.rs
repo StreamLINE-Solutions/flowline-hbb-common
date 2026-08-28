@@ -2774,18 +2774,15 @@ fn is_option_can_save(
 
 #[inline]
 pub fn is_incoming_only() -> bool {
-    HARD_SETTINGS
-        .read()
-        .unwrap()
-        .get("conn-type")
-        .map_or(false, |x| x == ("incoming"))
-        // FlowLINE white-label : QuickSupport — même binaire. Le mode "incoming-only"
-        // (fenêtre réduite ID/mot de passe) s'active si l'exe s'appelle
-        // `flowline-support.exe` ou si l'argument `--incoming-only` est passé.
-        || std::env::current_exe()
-            .ok()
-            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_lowercase()))
-            .is_some_and(|n| n == "flowline-support.exe")
+    // FlowLINE white-label : le build QuickSupport (feature `quick-support`) force
+    // le mode "incoming-only" (fenêtre réduite ID/mot de passe), indépendamment du
+    // nom du fichier — le binaire reste le même, seuls les features diffèrent.
+    cfg!(feature = "quick-support")
+        || HARD_SETTINGS
+            .read()
+            .unwrap()
+            .get("conn-type")
+            .map_or(false, |x| x == ("incoming"))
         || std::env::args().any(|a| a == "--incoming-only")
 }
 
