@@ -2779,6 +2779,14 @@ pub fn is_incoming_only() -> bool {
         .unwrap()
         .get("conn-type")
         .map_or(false, |x| x == ("incoming"))
+        // FlowLINE white-label : QuickSupport — même binaire. Le mode "incoming-only"
+        // (fenêtre réduite ID/mot de passe) s'active si l'exe s'appelle
+        // `flowline-support.exe` ou si l'argument `--incoming-only` est passé.
+        || std::env::current_exe()
+            .ok()
+            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_lowercase()))
+            .is_some_and(|n| n == "flowline-support.exe")
+        || std::env::args().any(|a| a == "--incoming-only")
 }
 
 #[inline]
