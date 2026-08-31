@@ -2787,6 +2787,13 @@ pub fn is_incoming_only() -> bool {
 }
 
 #[inline]
+pub fn is_account_logged() -> bool {
+    // FlowLINE : l'état "connecté au compte" = présence d'un access_token persisté
+    // (écrit par le flux OIDC lors du login Compte -> Connexion).
+    !LocalConfig::get_option("access_token").is_empty()
+}
+
+#[inline]
 pub fn is_outgoing_only() -> bool {
     HARD_SETTINGS
         .read()
