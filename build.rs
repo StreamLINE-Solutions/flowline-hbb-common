@@ -1,3 +1,6 @@
+use std::env;
+use std::path::PathBuf;
+
 fn main() {
     let out_dir = format!("{}/protos", std::env::var("OUT_DIR").unwrap());
 
@@ -11,4 +14,37 @@ fn main() {
         .customize(protobuf_codegen::Customize::default().tokio_bytes(true))
         .run()
         .expect("Codegen failed.");
+
+    // FlowLINE white-label : serveurs de rendez-vous + clé publique configurables
+    // par variables d'environnement au build, pour déployer un client vers n'importe
+    // quelle infra sans éditer le code. Le build.rs génère un fichier inclus par
+    // config.rs (`$OUT_DIR/flowline_config.rs`). Défauts = infra falcon.
+    //
+    // NB: `cargo:rerun-if-env-changed` déclare la dépendance → recompile quand la
+    // variable change (contrairement à `option_env!` que Cargo ne re-détecte pas).
+    let servers = env::var("RUSTDESK_RENDEZVOUS_SERVERS")
+        .unwrap_or_else(|_| "falcon.my-vth.ch".to_string());
+    let pub_key = env::var("RUSTDESK_RS_PUB_KEY")
+        .unwrap_or_else(|_| "y7HFkRp6dnePO7+ehiUSpbhUIqAwnRYDdquULvqJQXg=".to_string());
+
+    let dest = PathBuf::from(env::var("OUT_DIR").unwrap()).join("flowline_config.rs");
+    let list = servers
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .map(|s| format!("    \"{s}\","))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    std::fs::write(
+        &dest,
+        format!(
+            "pub const FLOWLINE_RENDEZVOUS_SERVERS: &[&str] = &[\n{list}\n];\n\
+             pub const FLOWLINE_RS_PUB_KEY: &str = \"{pub_key}\";\n"
+        ),
+    )
+    .expect("write flowline_config.rs");
+
+    println!("cargo:rerun-if-env-changed=RUSTDESK_RENDEZVOUS_SERVERS");
+    println!("cargo:rerun-if-env-changed=RUSTDESK_RS_PUB_KEY");
 }
