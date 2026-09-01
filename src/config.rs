@@ -127,6 +127,10 @@ pub const RENDEZVOUS_SERVERS: &[&str] = FLOWLINE_RENDEZVOUS_SERVERS;
 /// FlowLINE white-label : clé publique du serveur (hbbs id_ed25519.pub).
 pub const RS_PUB_KEY: &str = FLOWLINE_RS_PUB_KEY;
 
+/// API compte FlowLINE (TLS via NPM). Surchargeable au build via FLOWLINE_API_SERVER.
+/// Vide => dérivation historique http depuis le rendezvous.
+pub const API_SERVER: &str = FLOWLINE_API_SERVER;
+
 pub const RENDEZVOUS_PORT: i32 = 21116;
 pub const RELAY_PORT: i32 = 21117;
 pub const WS_RENDEZVOUS_PORT: i32 = 21118;

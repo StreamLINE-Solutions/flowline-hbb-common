@@ -26,6 +26,10 @@ fn main() {
         .unwrap_or_else(|_| "falcon.my-vth.ch".to_string());
     let pub_key = env::var("RUSTDESK_RS_PUB_KEY")
         .unwrap_or_else(|_| "y7HFkRp6dnePO7+ehiUSpbhUIqAwnRYDdquULvqJQXg=".to_string());
+    // API compte FlowLINE. Défaut https (TLS via NPM). Surchargeable au build pour
+    // pointer ailleurs (ex. un autre infra). Vide => dérivation historique http.
+    let api_server = env::var("FLOWLINE_API_SERVER")
+        .unwrap_or_else(|_| "https://api-falcon.my-vth.ch".to_string());
 
     let dest = PathBuf::from(env::var("OUT_DIR").unwrap()).join("flowline_config.rs");
     let list = servers
@@ -40,11 +44,13 @@ fn main() {
         &dest,
         format!(
             "pub const FLOWLINE_RENDEZVOUS_SERVERS: &[&str] = &[\n{list}\n];\n\
-             pub const FLOWLINE_RS_PUB_KEY: &str = \"{pub_key}\";\n"
+             pub const FLOWLINE_RS_PUB_KEY: &str = \"{pub_key}\";\n\
+             pub const FLOWLINE_API_SERVER: &str = \"{api_server}\";\n"
         ),
     )
     .expect("write flowline_config.rs");
 
     println!("cargo:rerun-if-env-changed=RUSTDESK_RENDEZVOUS_SERVERS");
     println!("cargo:rerun-if-env-changed=RUSTDESK_RS_PUB_KEY");
+    println!("cargo:rerun-if-env-changed=FLOWLINE_API_SERVER");
 }
