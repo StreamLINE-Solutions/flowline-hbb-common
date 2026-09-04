@@ -30,6 +30,11 @@ fn main() {
     // pointer ailleurs (ex. un autre infra). Vide => dérivation historique http.
     let api_server = env::var("FLOWLINE_API_SERVER")
         .unwrap_or_else(|_| "https://api-falcon.my-vth.ch".to_string());
+    // Serveur de version (contrat d'update RustDesk) : le client POSTe ici un
+    // petit payload et reçoit l'URL du tag de la dernière version. Côté FlowLINE,
+    // c'est l'endpoint /api/update/version/latest de l'API compte.
+    let version_url = env::var("FLOWLINE_VERSION_URL")
+        .unwrap_or_else(|_| "https://api-falcon.my-vth.ch/api/update/version/latest".to_string());
 
     let dest = PathBuf::from(env::var("OUT_DIR").unwrap()).join("flowline_config.rs");
     let list = servers
@@ -45,7 +50,8 @@ fn main() {
         format!(
             "pub const FLOWLINE_RENDEZVOUS_SERVERS: &[&str] = &[\n{list}\n];\n\
              pub const FLOWLINE_RS_PUB_KEY: &str = \"{pub_key}\";\n\
-             pub const FLOWLINE_API_SERVER: &str = \"{api_server}\";\n"
+             pub const FLOWLINE_API_SERVER: &str = \"{api_server}\";\n\
+             pub const FLOWLINE_VERSION_URL: &str = \"{version_url}\";\n"
         ),
     )
     .expect("write flowline_config.rs");
@@ -53,4 +59,5 @@ fn main() {
     println!("cargo:rerun-if-env-changed=RUSTDESK_RENDEZVOUS_SERVERS");
     println!("cargo:rerun-if-env-changed=RUSTDESK_RS_PUB_KEY");
     println!("cargo:rerun-if-env-changed=FLOWLINE_API_SERVER");
+    println!("cargo:rerun-if-env-changed=FLOWLINE_VERSION_URL");
 }

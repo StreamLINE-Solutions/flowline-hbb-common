@@ -131,6 +131,11 @@ pub const RS_PUB_KEY: &str = FLOWLINE_RS_PUB_KEY;
 /// Vide => dérivation historique http depuis le rendezvous.
 pub const API_SERVER: &str = FLOWLINE_API_SERVER;
 
+/// Serveur de version (contrat d'update RustDesk) : le client POSTe un petit
+/// payload ici pour connaître la dernière version dispo. Surchargeable au build
+/// via FLOWLINE_VERSION_URL.
+pub const VERSION_URL: &str = FLOWLINE_VERSION_URL;
+
 pub const RENDEZVOUS_PORT: i32 = 21116;
 pub const RELAY_PORT: i32 = 21117;
 pub const WS_RENDEZVOUS_PORT: i32 = 21118;
