@@ -136,6 +136,10 @@ pub const API_SERVER: &str = FLOWLINE_API_SERVER;
 /// via FLOWLINE_VERSION_URL.
 pub const VERSION_URL: &str = FLOWLINE_VERSION_URL;
 
+/// FlowLINE white-label : forcer toutes les sessions par le relay (désactive le
+/// punch UDP, 0006). Compilé en dur → non modifiable côté client (mesure garantie).
+pub const FORCE_RELAY: bool = FLOWLINE_FORCE_RELAY;
+
 pub const RENDEZVOUS_PORT: i32 = 21116;
 pub const RELAY_PORT: i32 = 21117;
 pub const WS_RENDEZVOUS_PORT: i32 = 21118;

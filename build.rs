@@ -35,6 +35,11 @@ fn main() {
     // c'est l'endpoint /api/update/version/latest de l'API compte.
     let version_url = env::var("FLOWLINE_VERSION_URL")
         .unwrap_or_else(|_| "https://api-falcon.my-vth.ch/api/update/version/latest".to_string());
+    // Forcer toutes les sessions par le relay (désactive le punch UDP) : garantit
+    // la mesure relay (0001) et que le service relay payé est bien utilisé (0006).
+    let force_relay = env::var("FLOWLINE_FORCE_RELAY")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(true);
 
     let dest = PathBuf::from(env::var("OUT_DIR").unwrap()).join("flowline_config.rs");
     let list = servers
@@ -44,6 +49,7 @@ fn main() {
         .map(|s| format!("    \"{s}\","))
         .collect::<Vec<_>>()
         .join("\n");
+    let force_relay = if force_relay { "true" } else { "false" };
 
     std::fs::write(
         &dest,
@@ -51,7 +57,8 @@ fn main() {
             "pub const FLOWLINE_RENDEZVOUS_SERVERS: &[&str] = &[\n{list}\n];\n\
              pub const FLOWLINE_RS_PUB_KEY: &str = \"{pub_key}\";\n\
              pub const FLOWLINE_API_SERVER: &str = \"{api_server}\";\n\
-             pub const FLOWLINE_VERSION_URL: &str = \"{version_url}\";\n"
+             pub const FLOWLINE_VERSION_URL: &str = \"{version_url}\";\n\
+             pub const FLOWLINE_FORCE_RELAY: bool = {force_relay};\n"
         ),
     )
     .expect("write flowline_config.rs");
@@ -60,4 +67,5 @@ fn main() {
     println!("cargo:rerun-if-env-changed=RUSTDESK_RS_PUB_KEY");
     println!("cargo:rerun-if-env-changed=FLOWLINE_API_SERVER");
     println!("cargo:rerun-if-env-changed=FLOWLINE_VERSION_URL");
+    println!("cargo:rerun-if-env-changed=FLOWLINE_FORCE_RELAY");
 }
