@@ -2847,7 +2847,11 @@ pub fn is_disable_ab() -> bool {
 
 #[inline]
 pub fn is_disable_account() -> bool {
-    is_some_hard_opton("disable-account")
+    // FlowLINE : en mode Support (feature `quick-support`, cross-platform :
+    // Android module de support, Windows/Linux/macOS QuickSupport), l'utilisateur
+    // final n'a pas de compte → on masque l'onglet Compte sur toutes les
+    // plateformes via ce flag unique (lu par les UIs desktop + mobile).
+    is_some_hard_opton("disable-account") || is_incoming_only()
 }
 
 #[inline]
