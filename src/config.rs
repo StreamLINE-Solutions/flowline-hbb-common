@@ -134,6 +134,11 @@ pub const VERSION_URL: &str = FLOWLINE_VERSION_URL;
 /// punch UDP, 0006). Compilé en dur → non modifiable côté client (mesure garantie).
 pub const FORCE_RELAY: bool = FLOWLINE_FORCE_RELAY;
 
+/// FlowLINE white-label : masquer des réglages sensibles côté technicien
+/// (onglet Network, 2FA, Change ID — 0054/0055). Compilé en dur via
+/// `FLOWLINE_RESTRICT_SETTINGS` → non modifiable côté client.
+pub const RESTRICT_SETTINGS: bool = FLOWLINE_RESTRICT_SETTINGS;
+
 pub const RENDEZVOUS_PORT: i32 = 21116;
 pub const RELAY_PORT: i32 = 21117;
 pub const WS_RENDEZVOUS_PORT: i32 = 21118;
@@ -3010,6 +3015,7 @@ pub mod keys {
     pub const OPTION_PRESET_STRATEGY_NAME: &str = "preset-strategy-name";
     pub const OPTION_REMOVE_PRESET_PASSWORD_WARNING: &str = "remove-preset-password-warning";
     pub const OPTION_HIDE_SECURITY_SETTINGS: &str = "hide-security-settings";
+    pub const OPTION_HIDE_2FA_SETTINGS: &str = "hide-2fa-settings";
     pub const OPTION_HIDE_NETWORK_SETTINGS: &str = "hide-network-settings";
     pub const OPTION_HIDE_SERVER_SETTINGS: &str = "hide-server-settings";
     pub const OPTION_HIDE_PROXY_SETTINGS: &str = "hide-proxy-settings";
@@ -3228,6 +3234,7 @@ pub mod keys {
         OPTION_PRESET_STRATEGY_NAME,
         OPTION_REMOVE_PRESET_PASSWORD_WARNING,
         OPTION_HIDE_SECURITY_SETTINGS,
+        OPTION_HIDE_2FA_SETTINGS,
         OPTION_HIDE_NETWORK_SETTINGS,
         OPTION_HIDE_SERVER_SETTINGS,
         OPTION_HIDE_PROXY_SETTINGS,

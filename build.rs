@@ -40,6 +40,12 @@ fn main() {
     let force_relay = env::var("FLOWLINE_FORCE_RELAY")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(true);
+    // Masquer des réglages sensibles côté technicien (0054/0055) : onglet Network,
+    // 2FA, Change ID. Compilé en dur → non modifiable côté client. `=0` pour un
+    // build sans restriction (debug).
+    let restrict_settings = env::var("FLOWLINE_RESTRICT_SETTINGS")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(true);
 
     let dest = PathBuf::from(env::var("OUT_DIR").unwrap()).join("flowline_config.rs");
     let list = servers
@@ -50,6 +56,7 @@ fn main() {
         .collect::<Vec<_>>()
         .join("\n");
     let force_relay = if force_relay { "true" } else { "false" };
+    let restrict_settings = if restrict_settings { "true" } else { "false" };
 
     std::fs::write(
         &dest,
@@ -58,7 +65,8 @@ fn main() {
              pub const FLOWLINE_RS_PUB_KEY: &str = \"{pub_key}\";\n\
              pub const FLOWLINE_API_SERVER: &str = \"{api_server}\";\n\
              pub const FLOWLINE_VERSION_URL: &str = \"{version_url}\";\n\
-             pub const FLOWLINE_FORCE_RELAY: bool = {force_relay};\n"
+             pub const FLOWLINE_FORCE_RELAY: bool = {force_relay};\n\
+             pub const FLOWLINE_RESTRICT_SETTINGS: bool = {restrict_settings};\n"
         ),
     )
     .expect("write flowline_config.rs");
@@ -68,4 +76,5 @@ fn main() {
     println!("cargo:rerun-if-env-changed=FLOWLINE_API_SERVER");
     println!("cargo:rerun-if-env-changed=FLOWLINE_VERSION_URL");
     println!("cargo:rerun-if-env-changed=FLOWLINE_FORCE_RELAY");
+    println!("cargo:rerun-if-env-changed=FLOWLINE_RESTRICT_SETTINGS");
 }
