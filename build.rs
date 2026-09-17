@@ -26,10 +26,18 @@ fn main() {
         .unwrap_or_else(|_| "falcon.my-vth.ch".to_string());
     let pub_key = env::var("RUSTDESK_RS_PUB_KEY")
         .unwrap_or_else(|_| "y7HFkRp6dnePO7+ehiUSpbhUIqAwnRYDdquULvqJQXg=".to_string());
-    // API compte FlowLINE. Défaut https (TLS via NPM). Surchargeable au build pour
-    // pointer ailleurs (ex. un autre infra). Vide => dérivation historique http.
+    // API compte FlowLINE (0051) : URL https obligatoire (TLS via NPM). Une
+    // valeur vide ou http:// fait échouer le build — plus aucun fallback http
+    // clair possible (l'ancienne dérivation `http://<rendezvous>:21114` est
+    // supprimée côté client).
     let api_server = env::var("FLOWLINE_API_SERVER")
         .unwrap_or_else(|_| "https://api-falcon.my-vth.ch".to_string());
+    if !api_server.starts_with("https://") {
+        panic!(
+            "FLOWLINE_API_SERVER doit etre une URL https explicite (recu: {:?})",
+            api_server
+        );
+    }
     // Serveur de version (contrat d'update RustDesk) : le client POSTe ici un
     // petit payload et reçoit l'URL du tag de la dernière version. Côté FlowLINE,
     // c'est l'endpoint /api/update/version/latest de l'API compte.
