@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
-use users::{get_current_uid, get_user_by_uid, os::unix::UserExt};
+use uzers::{get_current_uid, get_user_by_uid, os::unix::UserExt};
 
 use sctk::{
     output::OutputData,
