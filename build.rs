@@ -43,6 +43,15 @@ fn main() {
     // c'est l'endpoint /api/update/version/latest de l'API compte.
     let version_url = env::var("FLOWLINE_VERSION_URL")
         .unwrap_or_else(|_| "https://api-falcon.my-vth.ch/api/update/version/latest".to_string());
+    // N-05 (audit 21/09) : meme exigence https que FLOWLINE_API_SERVER — le
+    // client POSTe des infos de version (et recevra a terme l'URL de MAJ) vers
+    // cet endpoint ; une URL http en clair serait une surface MITM.
+    if !version_url.starts_with("https://") {
+        panic!(
+            "FLOWLINE_VERSION_URL doit etre une URL https explicite (recu: {:?})",
+            version_url
+        );
+    }
     // Forcer toutes les sessions par le relay (désactive le punch UDP) : garantit
     // la mesure relay (0001) et que le service relay payé est bien utilisé (0006).
     let force_relay = env::var("FLOWLINE_FORCE_RELAY")
