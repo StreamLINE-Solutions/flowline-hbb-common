@@ -139,6 +139,12 @@ pub const FORCE_RELAY: bool = FLOWLINE_FORCE_RELAY;
 /// `FLOWLINE_RESTRICT_SETTINGS` → non modifiable côté client.
 pub const RESTRICT_SETTINGS: bool = FLOWLINE_RESTRICT_SETTINGS;
 
+/// Signature des mises à jour (0050) : ring de clés publiques Ed25519
+/// `(key_id, clé base64)` embarquées au build via `FLOWLINE_UPDATE_KEYS`.
+/// La clé privée reste hors ligne ; `key_id` permet la rotation (embarquer
+/// l'ancienne et la nouvelle clé le temps de la transition).
+pub const UPDATE_KEYS: &[(&str, &str)] = FLOWLINE_UPDATE_KEYS;
+
 pub const RENDEZVOUS_PORT: i32 = 21116;
 pub const RELAY_PORT: i32 = 21117;
 pub const WS_RENDEZVOUS_PORT: i32 = 21118;

@@ -67,6 +67,7 @@ pub use stream::Stream;
 pub use whoami;
 pub mod tls;
 pub mod verifier;
+pub mod update_manifest;
 pub use async_recursion;
 #[cfg(target_os = "linux")]
 pub use uzers;
@@ -487,6 +488,10 @@ pub struct VersionCheckRequest {
 pub struct VersionCheckResponse {
     #[serde(default)]
     pub url: String,
+    /// URL du manifeste signé (0050). Champ additif : vide avec un serveur plus
+    /// ancien, le client retombe alors sur la dérivation depuis `url`.
+    #[serde(default)]
+    pub manifest_url: String,
 }
 
 pub const VER_TYPE_RUSTDESK_CLIENT: &str = "flowline-client";

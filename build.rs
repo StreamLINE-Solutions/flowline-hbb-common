@@ -63,6 +63,25 @@ fn main() {
     let restrict_settings = env::var("FLOWLINE_RESTRICT_SETTINGS")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(true);
+    // Signature des mises a jour (0050) : ring de cles publiques Ed25519
+    // embarquees, format `key_id:base64[,key_id:base64]`. La cle privee reste
+    // hors ligne (pass + playbook de release) ; `key_id` permet la rotation en
+    // embarquant l'ancienne et la nouvelle cle dans le meme build. Une cle
+    // absente du ring => mise a jour refusee (fail closed).
+    let update_keys = env::var("FLOWLINE_UPDATE_KEYS")
+        .unwrap_or_else(|_| "fl-2026:REMPLACER_PAR_LA_CLE_PUBLIQUE".to_string());
+    let update_keys_list = update_keys
+        .split(',')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| {
+            let (id, key) = s
+                .split_once(':')
+                .unwrap_or_else(|| panic!("FLOWLINE_UPDATE_KEYS: entree sans ':' ({s:?})"));
+            format!("    (\"{}\", \"{}\"),", id.trim(), key.trim())
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
 
     let dest = PathBuf::from(env::var("OUT_DIR").unwrap()).join("flowline_config.rs");
     let list = servers
@@ -83,7 +102,8 @@ fn main() {
              pub const FLOWLINE_API_SERVER: &str = \"{api_server}\";\n\
              pub const FLOWLINE_VERSION_URL: &str = \"{version_url}\";\n\
              pub const FLOWLINE_FORCE_RELAY: bool = {force_relay};\n\
-             pub const FLOWLINE_RESTRICT_SETTINGS: bool = {restrict_settings};\n"
+             pub const FLOWLINE_RESTRICT_SETTINGS: bool = {restrict_settings};\n\
+             pub const FLOWLINE_UPDATE_KEYS: &[(&str, &str)] = &[\n{update_keys_list}\n];\n"
         ),
     )
     .expect("write flowline_config.rs");
@@ -94,4 +114,5 @@ fn main() {
     println!("cargo:rerun-if-env-changed=FLOWLINE_VERSION_URL");
     println!("cargo:rerun-if-env-changed=FLOWLINE_FORCE_RELAY");
     println!("cargo:rerun-if-env-changed=FLOWLINE_RESTRICT_SETTINGS");
+    println!("cargo:rerun-if-env-changed=FLOWLINE_UPDATE_KEYS");
 }
