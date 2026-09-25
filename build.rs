@@ -69,7 +69,7 @@ fn main() {
     // embarquant l'ancienne et la nouvelle cle dans le meme build. Une cle
     // absente du ring => mise a jour refusee (fail closed).
     let update_keys = env::var("FLOWLINE_UPDATE_KEYS")
-        .unwrap_or_else(|_| "fl-2026:REMPLACER_PAR_LA_CLE_PUBLIQUE".to_string());
+        .unwrap_or_else(|_| "fl-2026:fjnPf6/HsXP7NB2kiG67XK5Cuq3BhMYxdoI2BDTsjZQ=".to_string());
     let update_keys_list = update_keys
         .split(',')
         .map(|s| s.trim())
