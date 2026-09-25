@@ -615,6 +615,26 @@ pub fn store_path<T: serde::Serialize>(path: PathBuf, cfg: T) -> crate::ResultTy
     }
 }
 
+/// 0070 (audit 25/09) : avec RESTRICT_SETTINGS (build FlowLINE), les options
+/// locales éditables (`custom-rendezvous-server`, `rendezvous-servers`) et le
+/// cache CONFIG2 ne peuvent pas rediriger le client vers un rendez-vous/relais
+/// tiers — seuls les serveurs compilés (ou licence) sont utilisés. Les tests de
+/// l'ancien comportement activent cet override (jamais compilé hors tests).
+#[cfg(test)]
+pub static ALLOW_LOCAL_RENDEZVOUS_OVERRIDE: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+#[inline]
+fn local_rendezvous_override_allowed() -> bool {
+    #[cfg(test)]
+    {
+        if ALLOW_LOCAL_RENDEZVOUS_OVERRIDE.load(std::sync::atomic::Ordering::Relaxed) {
+            return true;
+        }
+    }
+    !RESTRICT_SETTINGS
+}
+
 impl Config {
     fn load_<T: serde::Serialize + serde::de::DeserializeOwned + Default + std::fmt::Debug>(
         suffix: &str,
@@ -935,55 +955,57 @@ impl Config {
         }
     }
 
-    pub fn get_rendezvous_server() -> String {
-        let mut rendezvous_server = EXE_RENDEZVOUS_SERVER.read().unwrap().clone();
-        if rendezvous_server.is_empty() {
-            rendezvous_server = Self::get_option("custom-rendezvous-server");
-        }
-        if rendezvous_server.is_empty() {
-            rendezvous_server = PROD_RENDEZVOUS_SERVER.read().unwrap().clone();
-        }
-        if rendezvous_server.is_empty() {
-            rendezvous_server = CONFIG2.read().unwrap().rendezvous_server.clone();
-        }
-        if rendezvous_server.is_empty() {
-            rendezvous_server = Self::get_rendezvous_servers()
-                .drain(..)
-                .next()
-                .unwrap_or_default();
-        }
-        if !rendezvous_server.contains(':') {
-            rendezvous_server = format!("{rendezvous_server}:{RENDEZVOUS_PORT}");
-        }
-        rendezvous_server
+pub fn get_rendezvous_server() -> String {
+    let mut rendezvous_server = EXE_RENDEZVOUS_SERVER.read().unwrap().clone();
+    if rendezvous_server.is_empty() && local_rendezvous_override_allowed() {
+        rendezvous_server = Self::get_option("custom-rendezvous-server");
     }
+    if rendezvous_server.is_empty() {
+        rendezvous_server = PROD_RENDEZVOUS_SERVER.read().unwrap().clone();
+    }
+    if rendezvous_server.is_empty() && local_rendezvous_override_allowed() {
+        rendezvous_server = CONFIG2.read().unwrap().rendezvous_server.clone();
+    }
+    if rendezvous_server.is_empty() {
+        rendezvous_server = Self::get_rendezvous_servers()
+            .drain(..)
+            .next()
+            .unwrap_or_default();
+    }
+    if !rendezvous_server.contains(':') {
+        rendezvous_server = format!("{rendezvous_server}:{RENDEZVOUS_PORT}");
+    }
+    rendezvous_server
+}
 
-    pub fn get_rendezvous_servers() -> Vec<String> {
-        let s = EXE_RENDEZVOUS_SERVER.read().unwrap().clone();
-        if !s.is_empty() {
-            return vec![s];
-        }
+pub fn get_rendezvous_servers() -> Vec<String> {
+    let s = EXE_RENDEZVOUS_SERVER.read().unwrap().clone();
+    if !s.is_empty() {
+        return vec![s];
+    }
+    if local_rendezvous_override_allowed() {
         let s = Self::get_option("custom-rendezvous-server");
         if !s.is_empty() {
             return vec![s];
         }
-        let s = PROD_RENDEZVOUS_SERVER.read().unwrap().clone();
-        if !s.is_empty() {
-            return vec![s];
-        }
-        let serial_obsolute = CONFIG2.read().unwrap().serial > SERIAL;
-        if serial_obsolute {
-            let ss: Vec<String> = Self::get_option("rendezvous-servers")
-                .split(',')
-                .filter(|x| x.contains('.'))
-                .map(|x| x.to_owned())
-                .collect();
-            if !ss.is_empty() {
-                return ss;
-            }
-        }
-        return RENDEZVOUS_SERVERS.iter().map(|x| x.to_string()).collect();
     }
+    let s = PROD_RENDEZVOUS_SERVER.read().unwrap().clone();
+    if !s.is_empty() {
+        return vec![s];
+    }
+    let serial_obsolute = CONFIG2.read().unwrap().serial > SERIAL;
+    if serial_obsolute && local_rendezvous_override_allowed() {
+        let ss: Vec<String> = Self::get_option("rendezvous-servers")
+            .split(',')
+            .filter(|x| x.contains('.'))
+            .map(|x| x.to_owned())
+            .collect();
+        if !ss.is_empty() {
+            return ss;
+        }
+    }
+    return RENDEZVOUS_SERVERS.iter().map(|x| x.to_string()).collect();
+}
 
     pub fn reset_online() {
         *ONLINE.lock().unwrap() = Default::default();

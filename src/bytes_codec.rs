@@ -5,6 +5,14 @@ use tokio_util::codec::{Decoder, Encoder};
 // Bound speculative allocation from untrusted frame headers.
 const MAX_PREALLOCATED_PAYLOAD_LEN: usize = 256 * 1024;
 
+/// 0070 (audit 25/09) : borne par défaut des frames reçues. Sans borne, un pair
+/// peut annoncer une frame géante dans l'en-tête et forcer le décodeur à
+/// accumuler la frame complète en mémoire (DoS). 32 Mo couvre largement les
+/// plus grosses frames légitimes (bloc de transfert de fichiers = 128 Ko,
+/// images presse-papiers, frames vidéo) ; `set_max_packet_length` reste
+/// disponible pour ajuster par stream.
+pub const DEFAULT_MAX_PACKET_LENGTH: usize = 32 * 1024 * 1024;
+
 #[derive(Debug, Clone, Copy)]
 pub struct BytesCodec {
     state: DecodeState,
@@ -29,7 +37,7 @@ impl BytesCodec {
         Self {
             state: DecodeState::Head,
             raw: false,
-            max_packet_length: usize::MAX,
+            max_packet_length: DEFAULT_MAX_PACKET_LENGTH,
         }
     }
 
@@ -290,12 +298,44 @@ mod tests {
     fn decode_large_frame_header_caps_preallocation() {
         let mut codec = BytesCodec::new();
         let mut buf = BytesMut::new();
-        let n = 0x3FFFFFFFusize;
+        // Frame sous la borne par défaut (16 Mo) : acceptée, sans préallouer
+        // la taille annoncée.
+        let n = 16 * 1024 * 1024usize;
         const MAX_REASONABLE_CAPACITY: usize = MAX_PREALLOCATED_PAYLOAD_LEN * 4;
 
         buf.put_u32_le((n << 2) as u32 | 0x3);
 
         assert!(matches!(codec.decode(&mut buf), Ok(None)));
         assert!(buf.capacity() <= MAX_REASONABLE_CAPACITY);
+    }
+
+    #[test]
+    fn rejects_frame_larger_than_default_bound() {
+        // 0070 : une frame annoncée au-delà de DEFAULT_MAX_PACKET_LENGTH est
+        // refusée (DoS mémoire par frame géante).
+        let mut codec = BytesCodec::new();
+        let mut buf = BytesMut::new();
+        let n = DEFAULT_MAX_PACKET_LENGTH + 1;
+        buf.put_u32_le((n << 2) as u32 | 0x3);
+        let err = codec.decode(&mut buf).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn accepts_frame_at_default_bound() {
+        let mut codec = BytesCodec::new();
+        let mut buf = BytesMut::new();
+        let n = DEFAULT_MAX_PACKET_LENGTH;
+        buf.put_u32_le((n << 2) as u32 | 0x3);
+        assert!(matches!(codec.decode(&mut buf), Ok(None)));
+    }
+
+    #[test]
+    fn set_max_packet_length_overrides_default() {
+        let mut codec = BytesCodec::new();
+        codec.set_max_packet_length(1024);
+        let mut buf = BytesMut::new();
+        buf.put_u32_le((2048usize << 2) as u32 | 0x3);
+        assert!(codec.decode(&mut buf).is_err());
     }
 }

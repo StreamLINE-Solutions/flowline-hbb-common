@@ -807,8 +807,23 @@ impl TransferJob {
                 }
             }
         }
+        // 0070 (audit 25/09) : bornes anti-remplissage disque. Le volume total
+        // accepté par l'utilisateur = somme des tailles déclarées ; un pair ne
+        // peut pas écrire au-delà (quota par job) ni dépasser la taille déclarée
+        // du fichier courant (quota par fichier). La décompression est bornée
+        // par le quota restant (pas de pic mémoire au-delà).
+        let total_declared: u64 = self.files.iter().map(|f| f.size).sum();
+        let remaining = total_declared.saturating_sub(self.finished_size);
+        let file_num = block.file_num as usize;
         if block.compressed {
-            let tmp = decompress(&block.data);
+            let limit = if remaining > usize::MAX as u64 {
+                usize::MAX
+            } else {
+                remaining as usize
+            };
+            let tmp = crate::compress::decompress_with_limit(&block.data, limit)
+                .map_err(|_| anyhow!("bloc compressé au-delà du quota de transfert"))?;
+            self.check_write_quota(file_num, tmp.len() as u64)?;
             self.data_stream
                 .as_mut()
                 .ok_or(anyhow!("data stream is None"))?
@@ -816,6 +831,7 @@ impl TransferJob {
                 .await?;
             self.finished_size += tmp.len() as u64;
         } else {
+            self.check_write_quota(file_num, block.data.len() as u64)?;
             self.data_stream
                 .as_mut()
                 .ok_or(anyhow!("file is None"))?
@@ -824,6 +840,35 @@ impl TransferJob {
             self.finished_size += block.data.len() as u64;
         }
         self.transferred += block.data.len() as u64;
+        Ok(())
+    }
+
+    /// 0070 : refuse d'écrire au-delà de la taille déclarée du fichier courant
+    /// (quota par fichier) et de la taille totale déclarée du job (quota
+    /// global) — un pair ne peut pas remplir le disque de la cible.
+    fn check_write_quota(&self, file_num: usize, len: u64) -> ResultType<()> {
+        let total_declared: u64 = self.files.iter().map(|f| f.size).sum();
+        let new_total = self.finished_size.saturating_add(len);
+        if new_total > total_declared {
+            bail!(
+                "Transfert au-delà de la taille déclarée ({} > {} octets)",
+                new_total,
+                total_declared
+            );
+        }
+        if file_num < self.files.len() {
+            let prev_total: u64 = self.files[..file_num].iter().map(|f| f.size).sum();
+            let current_received = self.finished_size.saturating_sub(prev_total);
+            let new_file_total = current_received.saturating_add(len);
+            if new_file_total > self.files[file_num].size {
+                bail!(
+                    "Fichier {} au-delà de sa taille déclarée ({} > {} octets)",
+                    file_num,
+                    new_file_total,
+                    self.files[file_num].size
+                );
+            }
+        }
         Ok(())
     }
 
@@ -1802,5 +1847,60 @@ mod tests {
             .set_files(vec![new_file_entry(r"\\?\C:\Windows\Temp\x.txt")])
             .expect_err("verbatim drive absolute path must be rejected");
         assert_err_contains(err, "absolute path");
+    }
+
+    /// 0070 : job d'écriture avec des fichiers de tailles déclarées données.
+    fn new_quota_job(id: i32, sizes: &[u64]) -> TransferJob {
+        let files = sizes
+            .iter()
+            .enumerate()
+            .map(|(i, size)| {
+                let mut entry = new_file_entry(&format!("f{i}.bin"));
+                entry.size = *size;
+                entry
+            })
+            .collect();
+        TransferJob::new_write(
+            id,
+            JobType::Generic,
+            "/fake/remote".to_string(),
+            DataSource::FilePath(std::env::temp_dir()),
+            0,
+            false,
+            true,
+            false,
+        )
+        .with_files(files)
+        .expect("quota job")
+    }
+
+    #[test]
+    fn write_quota_rejects_beyond_total_declared_size() {
+        // 0070 : aucune taille déclarée (aucun fichier) => toute donnée reçue
+        // est refusée (quota global).
+        let job = new_quota_job(200, &[]);
+        let err = job
+            .check_write_quota(0, 1)
+            .expect_err("donnees sans fichier declare acceptees");
+        assert_err_contains(err, "Transfert au-delà de la taille déclarée");
+    }
+
+    #[test]
+    fn write_quota_rejects_beyond_current_file_size() {
+        // 0070 : le fichier courant ne peut pas dépasser sa taille déclarée,
+        // même si le quota global du job reste disponible (fichier 0 non reçu).
+        let job = new_quota_job(201, &[5, 5]);
+        assert!(job.check_write_quota(1, 5).is_ok());
+        let err = job
+            .check_write_quota(1, 6)
+            .expect_err("depassement de la taille du fichier accepte");
+        assert_err_contains(err, "Fichier 1 au-delà de sa taille déclarée");
+    }
+
+    #[test]
+    fn write_quota_accepts_exact_declared_total() {
+        let mut job = new_quota_job(202, &[3, 7]);
+        job.finished_size = 3;
+        assert!(job.check_write_quota(1, 7).is_ok());
     }
 }

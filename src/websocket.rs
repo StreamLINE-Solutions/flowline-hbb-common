@@ -404,9 +404,13 @@ pub fn check_ws(endpoint: &str) -> String {
 mod tests {
     use super::*;
     use crate::config::{keys, Config};
+    use std::sync::atomic::Ordering;
 
     #[test]
     fn test_check_ws() {
+        // 0070 : ces tests couvrent l'ancien comportement (override local
+        // honoré) ; en build RESTRICT_SETTINGS il faut l'activer explicitement.
+        crate::config::ALLOW_LOCAL_RENDEZVOUS_OVERRIDE.store(true, Ordering::Relaxed);
         // enable websocket
         Config::set_option(keys::OPTION_ALLOW_WEBSOCKET.to_string(), "Y".to_string());
 
@@ -535,5 +539,28 @@ mod tests {
         assert_eq!(check_ws("127.0.0.1:23455"), "ws://127.0.0.1:23458");
         assert_eq!(check_ws("127.0.0.1:23456"), "ws://127.0.0.1:23458");
         assert_eq!(check_ws("127.0.0.1:34567"), "ws://127.0.0.1:34569");
+
+        // 0070 : avec RESTRICT_SETTINGS (override test désactivé), une option
+        // locale ne peut pas rediriger le rendez-vous vers un tiers — les
+        // serveurs compilés restent seuls utilisés.
+        if crate::config::RESTRICT_SETTINGS {
+            crate::config::ALLOW_LOCAL_RENDEZVOUS_OVERRIDE.store(false, Ordering::Relaxed);
+            Config::set_option(
+                "custom-rendezvous-server".to_string(),
+                "evil.example.com".to_string(),
+            );
+            let servers = Config::get_rendezvous_servers();
+            assert!(!servers.iter().any(|s| s.contains("evil.example.com")));
+            assert_eq!(
+                servers,
+                crate::config::RENDEZVOUS_SERVERS
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+            );
+            assert!(!Config::get_rendezvous_server().contains("evil.example.com"));
+            Config::set_option("custom-rendezvous-server".to_string(), "".to_string());
+            crate::config::ALLOW_LOCAL_RENDEZVOUS_OVERRIDE.store(true, Ordering::Relaxed);
+        }
     }
 }
