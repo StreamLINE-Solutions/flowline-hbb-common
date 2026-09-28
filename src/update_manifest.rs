@@ -156,6 +156,99 @@ pub fn verify_update_manifest(
     )
 }
 
+/// Artefact d'un manifeste de release (site FlowLINE).
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct ReleaseManifestArtifact {
+    #[serde(default)]
+    pub filename: String,
+    #[serde(default)]
+    pub size: u64,
+    #[serde(default)]
+    pub sha256: String,
+}
+
+/// Manifeste de release signé (0072) : couvre tous les artefacts publiés d'une
+/// version (`flowline-<version>.manifest.json` + signature détachée `.sig`).
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct ReleaseManifest {
+    #[serde(default)]
+    pub artifacts: Vec<ReleaseManifestArtifact>,
+    #[serde(default)]
+    pub key_id: String,
+    #[serde(default)]
+    pub version: String,
+}
+
+/// Vérifie un manifeste de release (octets exacts + signature détachée) contre
+/// un ring de clés explicite, puis l'artefact `file_path` (nom, taille,
+/// SHA-256). Toute anomalie => erreur (l'appelant refuse et supprime).
+pub fn verify_release_manifest_with_keys(
+    keys: &[(&str, &str)],
+    manifest_bytes: &[u8],
+    sig_bytes: &[u8],
+    expected_version: &str,
+    file_path: &Path,
+) -> ResultType<ReleaseManifest> {
+    let manifest: ReleaseManifest = serde_json::from_slice(manifest_bytes)
+        .map_err(|_| anyhow!("manifeste de release JSON invalide"))?;
+    if manifest.key_id.is_empty() {
+        bail!("manifeste de release sans key_id");
+    }
+    let pk_b64 = keys
+        .iter()
+        .find(|(id, _)| *id == manifest.key_id)
+        .map(|(_, key)| *key)
+        .ok_or_else(|| anyhow!("clé de signature inconnue: {}", manifest.key_id))?;
+    let pk = decode_pk(pk_b64).ok_or_else(|| anyhow!("clé publique de mise à jour invalide"))?;
+    let sig = sign::Signature::from_bytes(sig_bytes)
+        .map_err(|_| anyhow!("signature de taille invalide"))?;
+    if !sign::verify_detached(&sig, manifest_bytes, &pk) {
+        bail!("signature invalide");
+    }
+    if manifest.version != expected_version {
+        bail!(
+            "version du manifeste de release incohérente ({} != {})",
+            manifest.version,
+            expected_version
+        );
+    }
+    let file_name = file_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| anyhow!("nom de fichier invalide"))?;
+    let artifact = manifest
+        .artifacts
+        .iter()
+        .find(|a| a.filename == file_name)
+        .ok_or_else(|| anyhow!("artefact absent du manifeste de release: {file_name}"))?;
+    let size = std::fs::metadata(file_path)?.len();
+    if size != artifact.size {
+        bail!("taille du fichier incohérente ({} != {})", size, artifact.size);
+    }
+    let sha256 = sha256_hex_file(file_path)?;
+    if !sha256.eq_ignore_ascii_case(&artifact.sha256) {
+        bail!("SHA-256 du fichier incohérent");
+    }
+    Ok(manifest)
+}
+
+/// Vérifie le manifeste de release avec le ring de clés embarqué
+/// (`config::UPDATE_KEYS`).
+pub fn verify_release_manifest(
+    manifest_bytes: &[u8],
+    sig_bytes: &[u8],
+    expected_version: &str,
+    file_path: &Path,
+) -> ResultType<ReleaseManifest> {
+    verify_release_manifest_with_keys(
+        crate::config::UPDATE_KEYS,
+        manifest_bytes,
+        sig_bytes,
+        expected_version,
+        file_path,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -286,5 +379,134 @@ mod tests {
         let keys = [(&key.0[..], &key.1[..])];
         assert!(verify_update_manifest_with_keys(&keys, &envelope, "1.4.18", &path).is_err());
         cleanup(&path);
+    }
+
+    const DEB_NAME: &str = "flowline-1.4.19-x86_64.deb";
+
+    /// Fichier de test pour le manifeste de release (nom imposé par l'artefact).
+    fn test_release_file(tag: &str, data: &[u8]) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "hbb_release_manifest_{}_{}",
+            std::process::id(),
+            tag
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(DEB_NAME);
+        std::fs::write(&path, data).unwrap();
+        path
+    }
+
+    /// Génère un manifeste de release signé (format site : JSON + signature
+    /// détachée).
+    fn signed_release_manifest(
+        key_id: &str,
+        version: &str,
+        artifacts: &[(&str, &[u8])],
+    ) -> ((String, String), Vec<u8>, Vec<u8>) {
+        let (pk, sk) = sign::gen_keypair();
+        let pk_b64 = crate::base64::engine::general_purpose::STANDARD.encode(pk.0);
+        let artifacts_json: Vec<ReleaseManifestArtifact> = artifacts
+            .iter()
+            .map(|(name, data)| ReleaseManifestArtifact {
+                filename: name.to_string(),
+                size: data.len() as u64,
+                sha256: Sha256::digest(data)
+                    .iter()
+                    .map(|b| format!("{b:02x}"))
+                    .collect(),
+            })
+            .collect();
+        let manifest = ReleaseManifest {
+            artifacts: artifacts_json,
+            key_id: key_id.to_string(),
+            version: version.to_string(),
+        };
+        let manifest_bytes = serde_json::to_vec(&manifest).unwrap();
+        let sig = sign::sign_detached(&manifest_bytes, &sk);
+        (
+            (key_id.to_string(), pk_b64),
+            manifest_bytes,
+            sig.to_bytes().to_vec(),
+        )
+    }
+
+    #[test]
+    fn release_verify_ok() {
+        let data = b"deb factice";
+        let path = test_release_file("ok", data);
+        let (key, manifest, sig) =
+            signed_release_manifest("fl-test", "1.4.19", &[(DEB_NAME, data)]);
+        let keys = [(&key.0[..], &key.1[..])];
+        let m = verify_release_manifest_with_keys(&keys, &manifest, &sig, "1.4.19", &path).unwrap();
+        assert_eq!(m.artifacts.len(), 1);
+        cleanup(&path);
+    }
+
+    #[test]
+    fn release_reject_tampered_manifest() {
+        let data = b"deb factice";
+        let path = test_release_file("tamper", data);
+        let (key, mut manifest, sig) =
+            signed_release_manifest("fl-test", "1.4.19", &[(DEB_NAME, data)]);
+        manifest[5] ^= 0x01;
+        let keys = [(&key.0[..], &key.1[..])];
+        assert!(verify_release_manifest_with_keys(&keys, &manifest, &sig, "1.4.19", &path).is_err());
+        cleanup(&path);
+    }
+
+    #[test]
+    fn release_reject_unknown_key_id() {
+        let data = b"deb factice";
+        let path = test_release_file("keyid", data);
+        let (_key, manifest, sig) =
+            signed_release_manifest("fl-2027", "1.4.19", &[(DEB_NAME, data)]);
+        let keys = [("fl-2026", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")];
+        assert!(verify_release_manifest_with_keys(&keys, &manifest, &sig, "1.4.19", &path).is_err());
+        cleanup(&path);
+    }
+
+    #[test]
+    fn release_reject_wrong_version() {
+        let data = b"deb factice";
+        let path = test_release_file("version", data);
+        let (key, manifest, sig) =
+            signed_release_manifest("fl-test", "1.4.18", &[(DEB_NAME, data)]);
+        let keys = [(&key.0[..], &key.1[..])];
+        assert!(verify_release_manifest_with_keys(&keys, &manifest, &sig, "1.4.19", &path).is_err());
+        cleanup(&path);
+    }
+
+    #[test]
+    fn release_reject_missing_artifact() {
+        let data = b"deb factice";
+        let path = test_release_file("missing", data);
+        let (key, manifest, sig) = signed_release_manifest(
+            "fl-test",
+            "1.4.19",
+            &[("flowline-1.4.19-x86_64.AppImage", data)],
+        );
+        let keys = [(&key.0[..], &key.1[..])];
+        assert!(verify_release_manifest_with_keys(&keys, &manifest, &sig, "1.4.19", &path).is_err());
+        cleanup(&path);
+    }
+
+    #[test]
+    fn release_reject_size_and_sha() {
+        let path = test_release_file("size", b"deb factice");
+        let (key, manifest, sig) =
+            signed_release_manifest("fl-test", "1.4.19", &[(DEB_NAME, b"autre contenu")]);
+        let keys = [(&key.0[..], &key.1[..])];
+        assert!(verify_release_manifest_with_keys(&keys, &manifest, &sig, "1.4.19", &path).is_err());
+
+        // Même taille, contenu différent => le SHA-256 doit refuser.
+        let path2 = test_release_file("swap", b"deb factice 1");
+        let (key2, manifest2, sig2) =
+            signed_release_manifest("fl-test", "1.4.19", &[(DEB_NAME, b"deb factice 2")]);
+        let keys2 = [(&key2.0[..], &key2.1[..])];
+        assert!(
+            verify_release_manifest_with_keys(&keys2, &manifest2, &sig2, "1.4.19", &path2).is_err()
+        );
+        cleanup(&path);
+        cleanup(&path2);
     }
 }
