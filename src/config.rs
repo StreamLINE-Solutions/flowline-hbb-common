@@ -110,9 +110,9 @@ const CHARS: &[char] = &[
     '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k',
     'm', 'n', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
 ];
-/// FlowLINE white-label : serveurs de rendez-vous + clé publique configurables par
-/// variables d'environnement au build (RUSTDESK_RENDEZVOUS_SERVERS, RUSTDESK_RS_PUB_KEY).
-/// Généré par `libs/hbb_common/build.rs` dans `$OUT_DIR/flowline_config.rs`.
+// FlowLINE white-label : serveurs de rendez-vous + clé publique configurables par
+// variables d'environnement au build (RUSTDESK_RENDEZVOUS_SERVERS, RUSTDESK_RS_PUB_KEY).
+// Généré par `libs/hbb_common/build.rs` dans `$OUT_DIR/flowline_config.rs`.
 include!(concat!(env!("OUT_DIR"), "/flowline_config.rs"));
 
 /// Serveurs de rendez-vous (1er = principal, suivants = secours essayés en séquence).

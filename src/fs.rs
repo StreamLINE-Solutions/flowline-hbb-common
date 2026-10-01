@@ -18,7 +18,7 @@ use tokio::{
 use crate::{anyhow::anyhow, bail, get_version_number, message_proto::*, ResultType, Stream};
 // https://doc.rust-lang.org/std/os/windows/fs/trait.MetadataExt.html
 use crate::{
-    compress::{compress, decompress},
+    compress::compress,
     config::Config,
 };
 
