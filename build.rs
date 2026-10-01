@@ -77,7 +77,7 @@ fn main() {
         .map(|s| {
             let (id, key) = s
                 .split_once(':')
-                .unwrap_or_else(|| panic!("FLOWLINE_UPDATE_KEYS: entree sans ':' ({s:?})"));
+                .unwrap_or_else(|| panic!("FLOWLINE_UPDATE_KEYS: entree sans ':' ({:?})", s));
             format!("    (\"{}\", \"{}\"),", id.trim(), key.trim())
         })
         .collect::<Vec<_>>()
