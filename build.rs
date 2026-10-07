@@ -30,9 +30,13 @@ fn main() {
     // valeur vide ou http:// fait échouer le build — plus aucun fallback http
     // clair possible (l'ancienne dérivation `http://<rendezvous>:21114` est
     // supprimée côté client).
+    // Exception dev/POC : http://localhost et http://127.0.0.1 autorisés
+    // (build local uniquement, jamais exposé sur le réseau).
     let api_server = env::var("FLOWLINE_API_SERVER")
         .unwrap_or_else(|_| "https://api-falcon.my-vth.ch".to_string());
-    if !api_server.starts_with("https://") {
+    let is_local_http = api_server.starts_with("http://localhost")
+        || api_server.starts_with("http://127.0.0.1");
+    if !api_server.starts_with("https://") && !is_local_http {
         panic!(
             "FLOWLINE_API_SERVER doit etre une URL https explicite (recu: {:?})",
             api_server
