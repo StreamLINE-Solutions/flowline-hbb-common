@@ -2,6 +2,11 @@ use std::env;
 use std::path::PathBuf;
 
 fn main() {
+    // Les directives rerun-if-env-changed ci-dessous suspendent le watch par
+    // defaut des fichiers du package : sans ceci, une modif des .proto ne
+    // regenere pas le codegen en incremental (protos/ couvre les deux fichiers).
+    println!("cargo:rerun-if-changed=protos");
+
     let out_dir = format!("{}/protos", std::env::var("OUT_DIR").unwrap());
 
     std::fs::create_dir_all(&out_dir).unwrap();
